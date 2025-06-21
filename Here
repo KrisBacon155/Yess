@@ -1,4 +1,3 @@
-loadstring([[
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -48,7 +47,7 @@ local barkCooldown = 3
 local lastBarkTime = 0
 
 local followOffset = Vector3.new(2, 1, -3)
-local range_exclaim = 100 -- 🟢 CHANGED HERE
+local range_exclaim = 100
 local range_question = 175
 local retreatDistance = 100
 
@@ -130,7 +129,6 @@ RunService.RenderStepped:Connect(function()
 	if alertEnabled and currentTarget and not isTooDark() then
 		local d = (hrp.Position - currentTarget.Position).Magnitude
 		if d <= range_exclaim then
-			-- CHASE AND BARK
 			targetPos = currentTarget.Position + Vector3.new(0, 1.5, 0)
 			billboardGui.Enabled = true
 			textLabel.Text = "!"
@@ -139,7 +137,6 @@ RunService.RenderStepped:Connect(function()
 				lastBarkTime = currentTime
 			end
 		elseif d <= range_question then
-			-- STAY NEAR, SHOW ?
 			targetPos = hrp.Position + followOffset
 			billboardGui.Enabled = true
 			textLabel.Text = "?"
@@ -155,4 +152,3 @@ RunService.RenderStepped:Connect(function()
 		pet.Position = pet.Position:Lerp(targetPos, 0.1)
 	end
 end)
-]])()
