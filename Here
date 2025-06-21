@@ -1,0 +1,158 @@
+loadstring([[
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local pet = Instance.new("Part")
+pet.Name = "LocalPetBlock"
+pet.Size = Vector3.new(2, 2, 2)
+pet.Color = Color3.fromRGB(139, 69, 19)
+pet.Anchored = true
+pet.CanCollide = false
+pet.Parent = workspace
+
+-- GLOW
+local light = Instance.new("PointLight", pet)
+light.Brightness = 2
+light.Range = 15
+light.Color = Color3.new(1, 1, 0.8)
+
+-- ALERT GUI
+local billboardGui = Instance.new("BillboardGui", pet)
+billboardGui.Size = UDim2.new(0, 50, 0, 50)
+billboardGui.AlwaysOnTop = true
+billboardGui.Enabled = false
+billboardGui.Adornee = pet
+
+local textLabel = Instance.new("TextLabel", billboardGui)
+textLabel.Size = UDim2.new(1, 0, 1, 0)
+textLabel.BackgroundTransparency = 1
+textLabel.Text = ""
+textLabel.TextColor3 = Color3.new(1, 0, 0)
+textLabel.TextScaled = true
+textLabel.Font = Enum.Font.FredokaOne
+
+-- SOUND
+local barkSound = Instance.new("Sound", pet)
+barkSound.SoundId = "rbxassetid://132514715"
+barkSound.Volume = 1
+
+-- TOGGLE GUI
+local alertEnabled = true
+local barkCooldown = 3
+local lastBarkTime = 0
+
+local followOffset = Vector3.new(2, 1, -3)
+local range_exclaim = 100 -- 🟢 CHANGED HERE
+local range_question = 175
+local retreatDistance = 100
+
+local playerGui = player:WaitForChild("PlayerGui")
+local screenGui = Instance.new("ScreenGui", playerGui)
+screenGui.Name = "PetGui"
+
+local toggleButton = Instance.new("TextButton", screenGui)
+toggleButton.Size = UDim2.new(0, 200, 0, 50)
+toggleButton.Position = UDim2.new(0, 20, 0, 20)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Text = "Alert Mode: ON"
+toggleButton.Font = Enum.Font.FredokaOne
+toggleButton.TextScaled = true
+
+toggleButton.MouseButton1Click:Connect(function()
+	alertEnabled = not alertEnabled
+	toggleButton.Text = "Alert Mode: " .. (alertEnabled and "ON" or "OFF")
+end)
+
+-- DARK CHECK
+local function isTooDark()
+	local ambient = Lighting.Ambient
+	local brightness = ambient.r + ambient.g + ambient.b
+	local fog = Lighting.FogEnd
+	return brightness < 0.3 or fog < 100
+end
+
+-- LINE OF SIGHT
+local function hasLineOfSight(fromPos, toPart)
+	local dir = toPart.Position - fromPos
+	local rayParams = RaycastParams.new()
+	rayParams.FilterDescendantsInstances = {pet, player.Character}
+	rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+	local result = workspace:Raycast(fromPos, dir, rayParams)
+	return not result or result.Instance:IsDescendantOf(toPart.Parent)
+end
+
+-- FIND CLOSEST VISIBLE PLAYER
+local function getClosestVisiblePlayer()
+	local closest = nil
+	local closestDist = range_question + 1
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character then
+			local targetHRP = p.Character:FindFirstChild("HumanoidRootPart")
+			if targetHRP then
+				local dist = (pet.Position - targetHRP.Position).Magnitude
+				if dist <= range_question and dist < closestDist and hasLineOfSight(pet.Position, targetHRP) then
+					closest = targetHRP
+					closestDist = dist
+				end
+			end
+		end
+	end
+	return closest, closestDist
+end
+
+-- TRACK
+local currentTarget = nil
+
+RunService.RenderStepped:Connect(function()
+	if not hrp then return end
+	local currentTime = tick()
+	local closest, dist = getClosestVisiblePlayer()
+	local targetPos
+
+	if currentTarget then
+		local dToTarget = (hrp.Position - currentTarget.Position).Magnitude
+		if dToTarget > retreatDistance or isTooDark() or not hasLineOfSight(pet.Position, currentTarget) then
+			currentTarget = nil
+		elseif closest and (hrp.Position - closest.Position).Magnitude < dToTarget then
+			currentTarget = closest
+		end
+	elseif closest and not isTooDark() then
+		currentTarget = closest
+	end
+
+	if alertEnabled and currentTarget and not isTooDark() then
+		local d = (hrp.Position - currentTarget.Position).Magnitude
+		if d <= range_exclaim then
+			-- CHASE AND BARK
+			targetPos = currentTarget.Position + Vector3.new(0, 1.5, 0)
+			billboardGui.Enabled = true
+			textLabel.Text = "!"
+			if currentTime - lastBarkTime >= barkCooldown then
+				barkSound:Play()
+				lastBarkTime = currentTime
+			end
+		elseif d <= range_question then
+			-- STAY NEAR, SHOW ?
+			targetPos = hrp.Position + followOffset
+			billboardGui.Enabled = true
+			textLabel.Text = "?"
+		end
+	else
+		currentTarget = nil
+		billboardGui.Enabled = false
+		textLabel.Text = ""
+		targetPos = hrp.Position + followOffset
+	end
+
+	if targetPos then
+		pet.Position = pet.Position:Lerp(targetPos, 0.1)
+	end
+end)
+]])()
